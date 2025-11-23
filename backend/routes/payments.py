@@ -44,28 +44,47 @@ def create_invoice(payload: InvoiceCreate):
         "payment_link": payment_link,
     }
 
-    res = supabase.table("invoices").insert(data).execute()
-    if res.error:
-        raise HTTPException(status_code=500, detail=str(res.error))
+    try:
+        res = supabase.table("invoices").insert(data).execute()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
-    return Invoice(**data)
+    if not res.data:
+        raise HTTPException(status_code=500, detail="Failed to insert invoice")
+
+    inserted = res.data[0] if isinstance(res.data, list) else res.data
+    return Invoice(**inserted)
 
 
 @router.get("/invoices/{invoice_id}", response_model=Invoice)
 def get_invoice(invoice_id: str):
     supabase = get_supabase_client()
-    res = supabase.table("invoices").select("*").eq("id", invoice_id).single().execute()
-    if res.error or not res.data:
+
+    try:
+        res = (
+            supabase.table("invoices")
+            .select("*")
+            .eq("id", invoice_id)
+            .limit(1)
+            .execute()
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    # If no data returned → 404
+    if not res.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
 
-    return Invoice(**res.data)
+    return Invoice(**res.data[0])
+
 
 
 @router.get("/invoices", response_model=List[Invoice])
 def list_invoices():
     supabase = get_supabase_client()
-    res = supabase.table("invoices").select("*").order("created_at", desc=True).execute()
-    if res.error:
-        raise HTTPException(status_code=500, detail=str(res.error))
+    try:
+        res = supabase.table("invoices").select("*").order("created_at", desc=True).execute()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
     return [Invoice(**row) for row in res.data]
